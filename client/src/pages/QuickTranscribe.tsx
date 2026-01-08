@@ -17,6 +17,7 @@ export default function QuickTranscribe() {
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const uploadAudio = trpc.upload.audio.useMutation();
   const transcribeMutation = trpc.transcription.transcribe.useMutation({
     onSuccess: (data) => {
       setTranscription(data.text);
@@ -98,11 +99,27 @@ export default function QuickTranscribe() {
     setIsTranscribing(true);
 
     try {
-      // Create a temporary URL for the file
-      const audioUrl = URL.createObjectURL(file);
+      // Convert file to base64
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64 = result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // Upload to S3
+      const { url: audioUrl } = await uploadAudio.mutateAsync({
+        fileName: file.name,
+        fileSize: file.size,
+        contentType: file.type,
+        base64Data,
+      });
       
-      // For now, we'll use a simulated approach
-      // In production, this would upload to S3 first then call transcription
+      // Transcribe
       await transcribeMutation.mutateAsync({ audioUrl });
     } catch (error) {
       // Error handled by mutation

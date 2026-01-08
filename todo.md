@@ -72,3 +72,6 @@
 
 ## Em Desenvolvimento
 - [x] Gerar ícones PNG para PWA (72x72, 96x96, 128x128, 144x144, 152x152, 192x192, 384x384, 512x512)
+
+- [x] Implementar endpoint de upload real para S3 (/api/upload)
+- [x] Atualizar frontend para usar o novo endpoint de upload

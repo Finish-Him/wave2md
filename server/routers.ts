@@ -300,6 +300,61 @@ Be thorough and professional. Extract all relevant information from the transcri
       }),
   }),
 
+  // ============ FILE UPLOAD ============
+  upload: router({
+    // Upload audio file to S3
+    audio: protectedProcedure
+      .input(z.object({
+        fileName: z.string(),
+        fileSize: z.number(),
+        contentType: z.string(),
+        base64Data: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Validate file size (16MB limit)
+        if (input.fileSize > 16 * 1024 * 1024) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'File size exceeds 16MB limit',
+          });
+        }
+
+        // Validate content type
+        const allowedTypes = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/webm', 'audio/ogg', 'audio/x-wav', 'audio/wave'];
+        if (!allowedTypes.includes(input.contentType)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid file type. Supported: WAV, MP3, WebM, OGG',
+          });
+        }
+
+        try {
+          // Convert base64 to buffer
+          const buffer = Buffer.from(input.base64Data, 'base64');
+
+          // Generate unique file key
+          const timestamp = Date.now();
+          const randomSuffix = nanoid(8);
+          const fileExtension = input.fileName.split('.').pop();
+          const fileKey = `audio/${ctx.user.id}/${timestamp}-${randomSuffix}.${fileExtension}`;
+
+          // Upload to S3
+          const { url } = await storagePut(fileKey, buffer, input.contentType);
+
+          return {
+            url,
+            fileKey,
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Upload failed: ${errorMessage}`,
+          });
+        }
+      }),
+  }),
+
   // ============ QUICK TRANSCRIPTION ============
   transcription: router({
     // Quick transcription without LLM analysis

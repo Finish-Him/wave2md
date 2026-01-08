@@ -24,6 +24,7 @@ export default function NewProject() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: apiKeyStatus } = trpc.apiKeys.getStatus.useQuery();
+  const uploadAudio = trpc.upload.audio.useMutation();
   const createProject = trpc.projects.create.useMutation();
   const processProject = trpc.projects.process.useMutation();
 
@@ -104,13 +105,25 @@ export default function NewProject() {
       setProcessingStatus("Fazendo upload do áudio...");
       setUploadProgress(10);
 
-      // Upload file to S3 using fetch to the storage endpoint
-      const formData = new FormData();
-      formData.append('file', file);
+      // Convert file to base64
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64 = result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
-      // For now, we'll use a simulated upload - in production this would go to S3
-      // The actual S3 upload would be handled by a dedicated endpoint
-      const audioUrl = URL.createObjectURL(file); // Temporary - replace with actual S3 URL
+      // Upload to S3
+      const { url: audioUrl } = await uploadAudio.mutateAsync({
+        fileName: file.name,
+        fileSize: file.size,
+        contentType: file.type,
+        base64Data,
+      });
       
       setUploadProgress(30);
       setProcessingStatus("Criando projeto...");
