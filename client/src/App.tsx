@@ -12,6 +12,7 @@ import Settings from "./pages/Settings";
 import QuickTranscribe from "./pages/QuickTranscribe";
 import Templates from "./pages/Templates";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import ChatBot from "./components/ChatBot";
 
 function Router() {
   return (
@@ -37,6 +38,7 @@ function App() {
           <Toaster />
           <Router />
           <PWAInstallPrompt />
+          <ChatBot />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

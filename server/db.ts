@@ -5,7 +5,8 @@ import {
   apiKeys, InsertApiKey, ApiKey,
   projects, InsertProject, Project,
   documents, InsertDocument, Document,
-  promptTemplates, InsertPromptTemplate, PromptTemplate
+  promptTemplates, InsertPromptTemplate, PromptTemplate,
+  chatMessages, InsertChatMessage, ChatMessage
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -324,4 +325,48 @@ export async function setDefaultPromptTemplate(userId: number, templateId: numbe
   await db.update(promptTemplates)
     .set({ isDefault: 1 })
     .where(eq(promptTemplates.id, templateId));
+}
+
+
+// ============ CHAT MESSAGES OPERATIONS ============
+
+export async function createChatMessage(message: InsertChatMessage): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(chatMessages).values(message);
+  return Number(result[0].insertId);
+}
+
+export async function getUserChatHistory(userId: number, limit: number = 50): Promise<ChatMessage[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(chatMessages)
+    .where(eq(chatMessages.userId, userId))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(limit);
+}
+
+export async function getProjectChatHistory(userId: number, projectId: number, limit: number = 20): Promise<ChatMessage[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(chatMessages)
+    .where(and(
+      eq(chatMessages.userId, userId),
+      eq(chatMessages.projectId, projectId)
+    ))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(limit);
+}
+
+export async function clearUserChatHistory(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(chatMessages)
+    .where(eq(chatMessages.userId, userId));
 }

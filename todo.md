@@ -85,3 +85,12 @@
 - [x] Interface de criação/edição de templates com preview
 - [x] Sistema de templates padrão por tipo de documento
 - [x] Aba Templates no menu lateral
+
+## Novas Funcionalidades Solicitadas
+- [x] Remover limite de 16MB do upload de áudio (permitir arquivos de qualquer tamanho)
+- [x] Implementar chatbot inteligente com LLM
+- [x] Criar interface de chat flutuante (botão fixo no canto da tela)
+- [x] Sistema de mensagens com histórico de conversas
+- [x] Integrar chatbot com contexto do projeto atual do usuário
+- [x] Chatbot pode responder sobre o processo, funcionalidades e tirar dúvidas
+- [x] Armazenar histórico de conversas no banco de dados

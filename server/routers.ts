@@ -20,7 +20,11 @@ import {
   getDefaultPromptTemplate,
   updatePromptTemplate,
   deletePromptTemplate,
-  setDefaultPromptTemplate
+  setDefaultPromptTemplate,
+  createChatMessage,
+  getUserChatHistory,
+  getProjectChatHistory,
+  clearUserChatHistory
 } from "./db";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { invokeLLM } from "./_core/llm";
@@ -318,13 +322,7 @@ Be thorough and professional. Extract all relevant information from the transcri
         base64Data: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Validate file size (16MB limit)
-        if (input.fileSize > 16 * 1024 * 1024) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'File size exceeds 16MB limit',
-          });
-        }
+        // No file size limit - allow files of any size
 
         // Validate content type
         const allowedTypes = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/webm', 'audio/ogg', 'audio/x-wav', 'audio/wave'];
@@ -511,6 +509,140 @@ Be thorough and professional. Extract all relevant information from the transcri
         }
 
         await setDefaultPromptTemplate(ctx.user.id, input.templateId, template.type);
+        return { success: true };
+      }),
+  }),
+
+  // ============ CHAT ASSISTANT ============
+  chat: router({
+    // Send a message to the chatbot
+    sendMessage: protectedProcedure
+      .input(z.object({
+        message: z.string().min(1),
+        projectId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Save user message
+        await createChatMessage({
+          userId: ctx.user.id,
+          role: "user",
+          content: input.message,
+          projectId: input.projectId || null,
+        });
+
+        // Build context for the LLM
+        let systemPrompt = `Você é um assistente inteligente do Wave2MD, uma plataforma que transforma áudios de reuniões em documentação técnica estruturada.
+
+Funcionalidades do Wave2MD:
+- Upload de áudio (qualquer tamanho e formato)
+- Transcrição automática via Speech-to-Text
+- Geração de documentos (PRD, README, TODO) via LLM
+- Transcrição Rápida (sem análise, apenas transcrição)
+- Templates customizáveis de prompts
+- Histórico de projetos
+- Gerenciamento de API Keys (OpenRouter e HuggingFace)
+
+Processo completo:
+1. Usuário faz upload de áudio
+2. Sistema transcreve o áudio
+3. LLM analisa a transcrição
+4. Gera 3 documentos: PRD, README e TODO
+5. Empacota tudo em ZIP para download
+
+Sua função:
+- Responder dúvidas sobre funcionalidades
+- Explicar o processo de transcrição e geração
+- Ajudar com problemas técnicos
+- Orientar sobre configurações
+- Ser amigável e prestativo
+
+Usuário atual: ${ctx.user.name || "Usuário"}
+`;
+
+        // If projectId is provided, add project context
+        if (input.projectId) {
+          try {
+            const project = await getProject(input.projectId);
+            if (project && project.userId === ctx.user.id) {
+              systemPrompt += `
+Contexto do Projeto Atual:
+- Nome: ${project.name}
+- Status: ${project.status}
+- Criado em: ${project.createdAt}
+`;
+              if (project.transcription) {
+                systemPrompt += `- Transcrição disponível: Sim
+`;
+              }
+              if (project.zipUrl) {
+                systemPrompt += `- Documentos gerados: Sim
+`;
+              }
+            }
+          } catch (error) {
+            // Ignore project context errors
+          }
+        }
+
+        // Get recent chat history for context
+        const recentHistory = input.projectId
+          ? await getProjectChatHistory(ctx.user.id, input.projectId, 10)
+          : await getUserChatHistory(ctx.user.id, 10);
+
+        // Build messages array (reverse to get chronological order)
+        const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+          { role: "system", content: systemPrompt },
+        ];
+
+        // Add recent history (limit to last 10 messages)
+        const historyMessages = recentHistory
+          .reverse()
+          .slice(-10)
+          .filter(msg => msg.role !== "system") // Filter out system messages from history
+          .map(msg => ({
+            role: msg.role as "user" | "assistant",
+            content: msg.content,
+          }));
+
+        messages.push(...historyMessages);
+
+        // Call LLM
+        const response = await invokeLLM({ messages });
+        const assistantMessage = typeof response.choices[0]?.message?.content === "string" 
+          ? response.choices[0].message.content 
+          : "Desculpe, não consegui processar sua mensagem.";
+
+        // Save assistant response
+        await createChatMessage({
+          userId: ctx.user.id,
+          role: "assistant",
+          content: assistantMessage,
+          projectId: input.projectId || null,
+        });
+
+        return {
+          message: assistantMessage,
+        };
+      }),
+
+    // Get chat history
+    getHistory: protectedProcedure
+      .input(z.object({
+        projectId: z.number().optional(),
+        limit: z.number().min(1).max(100).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const limit = input?.limit ?? 50;
+        if (input?.projectId) {
+          return await getProjectChatHistory(ctx.user.id, input.projectId, limit);
+        }
+        return await getUserChatHistory(ctx.user.id, limit);
+      }),
+
+    // Clear chat history
+    clearHistory: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        await clearUserChatHistory(ctx.user.id);
         return { success: true };
       }),
   }),
