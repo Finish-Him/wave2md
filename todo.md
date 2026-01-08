@@ -69,3 +69,6 @@
 - [ ] Edição de documentos gerados
 - [ ] Exportação para PDF
 - [ ] Compartilhamento de projetos
+
+## Em Desenvolvimento
+- [x] Gerar ícones PNG para PWA (72x72, 96x96, 128x128, 144x144, 152x152, 192x192, 384x384, 512x512)
