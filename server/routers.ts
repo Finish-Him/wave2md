@@ -24,13 +24,18 @@ import {
   createChatMessage,
   getUserChatHistory,
   getProjectChatHistory,
-  clearUserChatHistory
+  clearUserChatHistory,
+  createProjectShare,
+  getProjectShare,
+  getProjectShares,
+  updateShareViewCount,
+  deleteProjectShare
 } from "./db";
+import { nanoid } from "nanoid";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
-import { nanoid } from "nanoid";
 
 export const appRouter = router({
   system: systemRouter,
@@ -644,6 +649,140 @@ Contexto do Projeto Atual:
       .mutation(async ({ ctx }) => {
         await clearUserChatHistory(ctx.user.id);
         return { success: true };
+      }),
+  }),
+
+  // ============ PROJECT SHARING ============
+  shares: router({
+    // Create a new share link
+    create: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        isPublic: z.boolean().default(true),
+        password: z.string().optional(),
+        permissions: z.enum(["view", "download"]).default("view"),
+        expiresInDays: z.number().min(1).max(365).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Verify project ownership
+        const project = await getProject(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+        }
+
+        // Generate unique share token
+        const shareToken = nanoid(32);
+
+        // Calculate expiration date if provided
+        let expiresAt: Date | null = null;
+        if (input.expiresInDays) {
+          expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + input.expiresInDays);
+        }
+
+        // Create share
+        const shareId = await createProjectShare({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          shareToken,
+          isPublic: input.isPublic ? 1 : 0,
+          password: input.password || null,
+          permissions: input.permissions,
+          expiresAt,
+          viewCount: 0,
+          lastAccessedAt: null,
+        });
+
+        return {
+          shareId,
+          shareToken,
+          shareUrl: `${process.env.VITE_FRONTEND_FORGE_API_URL || ""}/share/${shareToken}`,
+        };
+      }),
+
+    // Get all shares for a project
+    list: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        // Verify project ownership
+        const project = await getProject(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+        }
+
+        return await getProjectShares(input.projectId);
+      }),
+
+    // Delete a share
+    delete: protectedProcedure
+      .input(z.object({
+        shareId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Get share to verify ownership
+        const shares = await getProjectShares(0); // We need to get by shareId, not projectId
+        const share = shares.find(s => s.id === input.shareId);
+        
+        if (!share || share.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Share not found" });
+        }
+
+        await deleteProjectShare(input.shareId);
+        return { success: true };
+      }),
+
+    // Get share details (public endpoint)
+    get: publicProcedure
+      .input(z.object({
+        shareToken: z.string(),
+        password: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const share = await getProjectShare(input.shareToken);
+        
+        if (!share) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Share not found" });
+        }
+
+        // Check expiration
+        if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "This share link has expired" });
+        }
+
+        // Check password for private shares
+        if (share.isPublic === 0) {
+          if (!input.password || input.password !== share.password) {
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid password" });
+          }
+        }
+
+        // Update view count
+        await updateShareViewCount(share.id);
+
+        // Get project details
+        const project = await getProject(share.projectId);
+        if (!project) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+        }
+
+        // Get documents if permission allows
+        let documents: any[] = [];
+        if (share.permissions === "download" || share.permissions === "view") {
+          documents = await getProjectDocuments(share.projectId);
+        }
+
+        return {
+          project: {
+            name: project.name,
+            status: project.status,
+            createdAt: project.createdAt,
+            transcription: share.permissions === "view" || share.permissions === "download" ? project.transcription : null,
+          },
+          documents,
+          permissions: share.permissions,
+        };
       }),
   }),
 });

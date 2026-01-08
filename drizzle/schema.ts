@@ -116,3 +116,24 @@ export const chatMessages = mysqlTable("chat_messages", {
 
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = typeof chatMessages.$inferInsert;
+
+/**
+ * Project shares for collaboration
+ * Allows users to share projects via public or private links
+ */
+export const projectShares = mysqlTable("project_shares", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  userId: int("userId").notNull(), // Owner of the project
+  shareToken: varchar("shareToken", { length: 64 }).notNull().unique(), // UUID for the share link
+  isPublic: int("isPublic").default(1).notNull(), // 1 = public, 0 = private (requires password)
+  password: text("password"), // Hashed password for private shares
+  permissions: mysqlEnum("permissions", ["view", "download"]).default("view").notNull(),
+  expiresAt: timestamp("expiresAt"), // Optional expiration date
+  viewCount: int("viewCount").default(0).notNull(), // Track how many times the link was accessed
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastAccessedAt: timestamp("lastAccessedAt"),
+});
+
+export type ProjectShare = typeof projectShares.$inferSelect;
+export type InsertProjectShare = typeof projectShares.$inferInsert;

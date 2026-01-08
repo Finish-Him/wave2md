@@ -161,7 +161,7 @@ importers:
         specifier: ^3.15.0
         version: 3.15.1
       nanoid:
-        specifier: ^5.1.5
+        specifier: ^5.1.6
         version: 5.1.6
       next-themes:
         specifier: ^0.4.6

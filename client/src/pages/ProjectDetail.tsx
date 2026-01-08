@@ -10,6 +10,7 @@ import {
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
+import ShareManager from "@/components/ShareManager";
 
 export default function ProjectDetail() {
   const params = useParams<{ id: string }>();
@@ -309,6 +310,15 @@ export default function ProjectDetail() {
                   </TabsContent>
                 ))}
               </Tabs>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Share Manager */}
+        {project.status === 'completed' && (
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="pt-6">
+              <ShareManager projectId={projectId} />
             </CardContent>
           </Card>
         )}

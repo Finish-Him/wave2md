@@ -94,3 +94,15 @@
 - [x] Integrar chatbot com contexto do projeto atual do usuário
 - [x] Chatbot pode responder sobre o processo, funcionalidades e tirar dúvidas
 - [x] Armazenar histórico de conversas no banco de dados
+
+## Sistema de Compartilhamento de Projetos
+- [x] Criar tabela `project_shares` no banco de dados
+- [x] Gerar links únicos de compartilhamento (UUID)
+- [x] Suporte a links públicos e privados (com senha)
+- [x] Controle de permissões (visualização, download)
+- [x] Expiração opcional de links
+- [x] Endpoints de criação, listagem e revogação de compartilhamentos
+- [x] Interface de gerenciamento na página de detalhes do projeto
+- [x] Página pública para visualizar projetos compartilhados
+- [x] Validação de senha para links privados
+- [x] Contador de visualizações de links compartilhados

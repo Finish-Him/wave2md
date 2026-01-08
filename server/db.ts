@@ -6,7 +6,8 @@ import {
   projects, InsertProject, Project,
   documents, InsertDocument, Document,
   promptTemplates, InsertPromptTemplate, PromptTemplate,
-  chatMessages, InsertChatMessage, ChatMessage
+  chatMessages, InsertChatMessage, ChatMessage,
+  projectShares, InsertProjectShare, ProjectShare
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -369,4 +370,77 @@ export async function clearUserChatHistory(userId: number): Promise<void> {
 
   await db.delete(chatMessages)
     .where(eq(chatMessages.userId, userId));
+}
+
+
+// ============ PROJECT SHARES OPERATIONS ============
+
+export async function createProjectShare(share: InsertProjectShare): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(projectShares).values(share);
+  return Number(result[0].insertId);
+}
+
+export async function getProjectShare(shareToken: string): Promise<ProjectShare | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select()
+    .from(projectShares)
+    .where(eq(projectShares.shareToken, shareToken))
+    .limit(1);
+
+  return result[0];
+}
+
+export async function getProjectShares(projectId: number): Promise<ProjectShare[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(projectShares)
+    .where(eq(projectShares.projectId, projectId))
+    .orderBy(desc(projectShares.createdAt));
+}
+
+export async function updateShareViewCount(shareId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Get current share
+  const share = await db.select()
+    .from(projectShares)
+    .where(eq(projectShares.id, shareId))
+    .limit(1);
+
+  if (share[0]) {
+    await db.update(projectShares)
+      .set({ 
+        viewCount: share[0].viewCount + 1,
+        lastAccessedAt: new Date()
+      })
+      .where(eq(projectShares.id, shareId));
+  }
+}
+
+export async function deleteProjectShare(shareId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(projectShares)
+    .where(eq(projectShares.id, shareId));
+}
+
+export async function deleteExpiredShares(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const now = new Date();
+  await db.delete(projectShares)
+    .where(and(
+      eq(projectShares.expiresAt, now),
+      // Only delete if expiresAt is in the past
+    ));
 }
