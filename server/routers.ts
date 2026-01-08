@@ -4,23 +4,28 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { 
+  upsertUser, 
+  getUserByOpenId, 
   upsertApiKey, 
-  getUserApiKeys, 
   getApiKey,
-  createProject,
+  getUserApiKeys, 
+  createProject, 
   getProject,
-  getUserProjects,
-  updateProject,
-  updateProjectStatus,
-  createDocument,
+ 
+  getUserProjects, 
+  updateProject, 
+  updateProjectStatus, 
+  createDocument, 
+  getDocument, 
   getProjectDocuments,
-  createPromptTemplate,
   getUserPromptTemplates,
   getPromptTemplate,
+
   getDefaultPromptTemplate,
+  setDefaultPromptTemplate,
+  createPromptTemplate,
   updatePromptTemplate,
   deletePromptTemplate,
-  setDefaultPromptTemplate,
   createChatMessage,
   getUserChatHistory,
   getProjectChatHistory,
@@ -177,7 +182,14 @@ export const appRouter = router({
           // Step 2: LLM Analysis (25-60%)
           await updateProjectStatus(input.projectId, "analyzing", 30);
 
-          const systemPrompt = `You are a technical documentation expert. Analyze the following transcription from a meeting/brainstorming session and generate structured technical documents.
+          // Fetch user's custom templates or use defaults
+          const prdTemplate = await getDefaultPromptTemplate(ctx.user.id, "prd");
+          const readmeTemplate = await getDefaultPromptTemplate(ctx.user.id, "readme");
+          const todoTemplate = await getDefaultPromptTemplate(ctx.user.id, "todo");
+          const systemTemplate = await getDefaultPromptTemplate(ctx.user.id, "system");
+
+          // Build system prompt using custom template or fallback
+          const systemPrompt = systemTemplate?.promptContent || `You are a technical documentation expert. Analyze the following transcription from a meeting/brainstorming session and generate structured technical documents.
 
 Your output MUST be a valid JSON object with exactly this structure:
 {
@@ -189,9 +201,9 @@ Your output MUST be a valid JSON object with exactly this structure:
 }
 
 Guidelines for each document:
-- PRD: Include problem statement, goals, user stories, requirements, success metrics
-- README: Include project description, features, installation, usage, tech stack
-- TODO: Include actionable tasks with checkboxes, organized by priority/phase
+- PRD: ${prdTemplate?.promptContent || "Include problem statement, goals, user stories, requirements, success metrics"}
+- README: ${readmeTemplate?.promptContent || "Include project description, features, installation, usage, tech stack"}
+- TODO: ${todoTemplate?.promptContent || "Include actionable tasks with checkboxes, organized by priority/phase"}
 
 Be thorough and professional. Extract all relevant information from the transcription.`;
 

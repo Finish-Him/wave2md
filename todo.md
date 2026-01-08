@@ -124,3 +124,9 @@
 - [x] Listar ícones que precisam ser criados
 - [x] Gerar ícones personalizados com Nano Banana Pro (favicons, Apple Touch Icon, empty state, splash screen)
 - [x] Integrar novos ícones na interface (favicons, Apple Touch Icon, splash screen, empty state)
+
+## Integração de Templates no Pipeline
+- [x] Modificar endpoint `projects.process` para buscar templates do usuário
+- [x] Implementar lógica de fallback para templates padrão (built-in)
+- [x] Usar template específico para cada tipo de documento (PRD, README, TODO, System)
+- [x] Testar geração com templates personalizados
