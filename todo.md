@@ -75,3 +75,13 @@
 
 - [x] Implementar endpoint de upload real para S3 (/api/upload)
 - [x] Atualizar frontend para usar o novo endpoint de upload
+
+## Novas Funcionalidades Concluídas
+- [x] Implementar indicador de progresso real durante upload para S3
+- [x] Criar sistema de templates de prompts customizáveis
+- [x] Adicionar interface de gerenciamento de templates
+- [x] Salvar templates no banco de dados por usuário
+- [x] Endpoint completo de CRUD de templates
+- [x] Interface de criação/edição de templates com preview
+- [x] Sistema de templates padrão por tipo de documento
+- [x] Aba Templates no menu lateral

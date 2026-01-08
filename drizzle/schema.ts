@@ -19,7 +19,26 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * API Keys table - stores user's external API keys (OpenRouter, HuggingFace)
+ * Prompt templates for document generation.
+ * Users can customize prompts to match their team's standards.
+ */
+export const promptTemplates = mysqlTable("prompt_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  type: mysqlEnum("type", ["prd", "readme", "todo", "system"]).notNull(),
+  promptContent: text("promptContent").notNull(),
+  isDefault: int("isDefault").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PromptTemplate = typeof promptTemplates.$inferSelect;
+export type InsertPromptTemplate = typeof promptTemplates.$inferInsert;
+
+/**
+ * Stores user's external API keys (OpenRouter, HuggingFace)
  */
 export const apiKeys = mysqlTable("api_keys", {
   id: int("id").autoincrement().primaryKey(),

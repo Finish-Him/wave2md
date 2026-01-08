@@ -13,7 +13,14 @@ import {
   updateProject,
   updateProjectStatus,
   createDocument,
-  getProjectDocuments
+  getProjectDocuments,
+  createPromptTemplate,
+  getUserPromptTemplates,
+  getPromptTemplate,
+  getDefaultPromptTemplate,
+  updatePromptTemplate,
+  deletePromptTemplate,
+  setDefaultPromptTemplate
 } from "./db";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { invokeLLM } from "./_core/llm";
@@ -395,6 +402,116 @@ Be thorough and professional. Extract all relevant information from the transcri
           throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
         }
         return await getProjectDocuments(input.projectId);
+      }),
+  }),
+
+  // ============ PROMPT TEMPLATES ============
+  templates: router({
+    // List all templates for the current user
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await getUserPromptTemplates(ctx.user.id);
+    }),
+
+    // Get a specific template
+    get: protectedProcedure
+      .input(z.object({ templateId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const template = await getPromptTemplate(input.templateId);
+        if (!template || template.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+        }
+        return template;
+      }),
+
+    // Get default template for a specific type
+    getDefault: protectedProcedure
+      .input(z.object({ type: z.enum(["prd", "readme", "todo", "system"]) }))
+      .query(async ({ ctx, input }) => {
+        return await getDefaultPromptTemplate(ctx.user.id, input.type);
+      }),
+
+    // Create a new template
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        type: z.enum(["prd", "readme", "todo", "system"]),
+        promptContent: z.string().min(1),
+        isDefault: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const templateId = await createPromptTemplate({
+          userId: ctx.user.id,
+          name: input.name,
+          description: input.description || null,
+          type: input.type,
+          promptContent: input.promptContent,
+          isDefault: input.isDefault ? 1 : 0,
+        });
+
+        // If this is set as default, update other templates
+        if (input.isDefault) {
+          await setDefaultPromptTemplate(ctx.user.id, templateId, input.type);
+        }
+
+        return { templateId };
+      }),
+
+    // Update a template
+    update: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        promptContent: z.string().min(1).optional(),
+        isDefault: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const template = await getPromptTemplate(input.templateId);
+        if (!template || template.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+        }
+
+        const updateData: any = {};
+        if (input.name !== undefined) updateData.name = input.name;
+        if (input.description !== undefined) updateData.description = input.description;
+        if (input.promptContent !== undefined) updateData.promptContent = input.promptContent;
+        if (input.isDefault !== undefined) updateData.isDefault = input.isDefault ? 1 : 0;
+
+        await updatePromptTemplate(input.templateId, updateData);
+
+        // If this is set as default, update other templates
+        if (input.isDefault) {
+          await setDefaultPromptTemplate(ctx.user.id, input.templateId, template.type);
+        }
+
+        return { success: true };
+      }),
+
+    // Delete a template
+    delete: protectedProcedure
+      .input(z.object({ templateId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const template = await getPromptTemplate(input.templateId);
+        if (!template || template.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+        }
+
+        await deletePromptTemplate(input.templateId);
+        return { success: true };
+      }),
+
+    // Set a template as default
+    setDefault: protectedProcedure
+      .input(z.object({ templateId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const template = await getPromptTemplate(input.templateId);
+        if (!template || template.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+        }
+
+        await setDefaultPromptTemplate(ctx.user.id, input.templateId, template.type);
+        return { success: true };
       }),
   }),
 });

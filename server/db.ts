@@ -4,7 +4,8 @@ import {
   InsertUser, users, 
   apiKeys, InsertApiKey, ApiKey,
   projects, InsertProject, Project,
-  documents, InsertDocument, Document
+  documents, InsertDocument, Document,
+  promptTemplates, InsertPromptTemplate, PromptTemplate
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -240,4 +241,87 @@ export async function getDocument(documentId: number): Promise<Document | undefi
     .limit(1);
   
   return result.length > 0 ? result[0] : undefined;
+}
+
+// ============ PROMPT TEMPLATE OPERATIONS ============
+
+export async function createPromptTemplate(data: InsertPromptTemplate): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(promptTemplates).values(data);
+  return result[0].insertId;
+}
+
+export async function getUserPromptTemplates(userId: number): Promise<PromptTemplate[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(promptTemplates)
+    .where(eq(promptTemplates.userId, userId))
+    .orderBy(desc(promptTemplates.createdAt));
+}
+
+export async function getPromptTemplate(templateId: number): Promise<PromptTemplate | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select()
+    .from(promptTemplates)
+    .where(eq(promptTemplates.id, templateId))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getDefaultPromptTemplate(userId: number, type: "prd" | "readme" | "todo" | "system"): Promise<PromptTemplate | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select()
+    .from(promptTemplates)
+    .where(and(
+      eq(promptTemplates.userId, userId),
+      eq(promptTemplates.type, type),
+      eq(promptTemplates.isDefault, 1)
+    ))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updatePromptTemplate(templateId: number, data: Partial<InsertPromptTemplate>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(promptTemplates)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(promptTemplates.id, templateId));
+}
+
+export async function deletePromptTemplate(templateId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(promptTemplates)
+    .where(eq(promptTemplates.id, templateId));
+}
+
+export async function setDefaultPromptTemplate(userId: number, templateId: number, type: "prd" | "readme" | "todo" | "system"): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // First, unset all defaults for this user and type
+  await db.update(promptTemplates)
+    .set({ isDefault: 0 })
+    .where(and(
+      eq(promptTemplates.userId, userId),
+      eq(promptTemplates.type, type)
+    ));
+
+  // Then set the new default
+  await db.update(promptTemplates)
+    .set({ isDefault: 1 })
+    .where(eq(promptTemplates.id, templateId));
 }

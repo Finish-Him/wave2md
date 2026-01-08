@@ -15,6 +15,13 @@
       "when": 1767909443426,
       "tag": "0001_fat_elektra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1767911713923,
+      "tag": "0002_lumpy_lilandra",
+      "breakpoints": true
     }
   ]
 }
