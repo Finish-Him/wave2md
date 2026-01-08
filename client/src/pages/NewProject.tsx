@@ -11,7 +11,6 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 const ACCEPTED_FORMATS = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/x-wav', 'audio/wave'];
-const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB
 
 export default function NewProject() {
   const [, setLocation] = useLocation();
@@ -54,10 +53,7 @@ export default function NewProject() {
       return;
     }
     
-    if (selectedFile.size > MAX_FILE_SIZE) {
-      toast.error("Arquivo muito grande. Máximo 16MB.");
-      return;
-    }
+    // No file size limit
 
     setFile(selectedFile);
     
@@ -245,7 +241,7 @@ export default function NewProject() {
                     ou clique para selecionar
                   </p>
                   <p className="text-slate-600 text-xs mt-3">
-                    Formatos aceitos: WAV, MP3 (máx. 16MB)
+                    Formatos aceitos: WAV, MP3 (sem limite de tamanho)
                   </p>
                 </div>
               ) : (

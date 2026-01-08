@@ -83,7 +83,7 @@ export default function Projects() {
               </div>
             ) : !projects || projects.length === 0 ? (
               <div className="text-center py-12">
-                <FolderOpen className="h-16 w-16 text-slate-600 mx-auto mb-4" />
+                <img src="/empty-projects.png" alt="Nenhum projeto" className="h-48 w-48 mx-auto mb-4 opacity-80" />
                 <h3 className="text-white font-medium text-lg mb-2">Nenhum projeto ainda</h3>
                 <p className="text-slate-400 mb-4">Comece criando seu primeiro projeto de documentação.</p>
                 <Button 

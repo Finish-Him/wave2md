@@ -7,7 +7,6 @@ import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 const ACCEPTED_FORMATS = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/x-wav', 'audio/wave', 'audio/webm', 'audio/ogg'];
-const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB
 
 export default function QuickTranscribe() {
   const [file, setFile] = useState<File | null>(null);
@@ -58,10 +57,7 @@ export default function QuickTranscribe() {
       return;
     }
     
-    if (selectedFile.size > MAX_FILE_SIZE) {
-      toast.error("Arquivo muito grande. Máximo 16MB.");
-      return;
-    }
+    // No file size limit
 
     setFile(selectedFile);
     setTranscription(null);
@@ -217,7 +213,7 @@ export default function QuickTranscribe() {
                   ou clique para selecionar
                 </p>
                 <p className="text-slate-600 text-xs mt-3">
-                  Formatos aceitos: WAV, MP3, WebM, OGG (máx. 16MB)
+                  Formatos aceitos: WAV, MP3, WebM, OGG (sem limite de tamanho)
                 </p>
               </div>
             ) : (

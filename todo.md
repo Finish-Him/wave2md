@@ -106,3 +106,21 @@
 - [x] Página pública para visualizar projetos compartilhados
 - [x] Validação de senha para links privados
 - [x] Contador de visualizações de links compartilhados
+
+## Correções Urgentes
+- [x] Remover limite de 16MB no frontend (validação de input)
+- [x] Verificar e remover qualquer validação de tamanho no backend
+- [x] Aumentar limite de body size no Express (agora 500MB)
+- [x] Testar upload de arquivo > 16MB
+
+## Melhorias de Visualização
+- [ ] Melhorar espaçamento e hierarquia visual
+- [ ] Otimizar responsividade mobile
+- [ ] Melhorar feedback visual durante uploads
+- [ ] Aprimorar cards e componentes
+
+## Ícones Personalizados (Nano Banana Pro)
+- [x] Identificar todos os ícones existentes no projeto
+- [x] Listar ícones que precisam ser criados
+- [x] Gerar ícones personalizados com Nano Banana Pro (favicons, Apple Touch Icon, empty state, splash screen)
+- [x] Integrar novos ícones na interface (favicons, Apple Touch Icon, splash screen, empty state)
