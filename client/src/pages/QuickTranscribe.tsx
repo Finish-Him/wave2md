@@ -2,9 +2,12 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Upload, FileAudio, X, Loader2, Copy, Download, Mic } from "lucide-react";
+import { Upload, FileAudio, X, Loader2, Copy, Download, Mic, Trash2, Clock, FileText } from "lucide-react";
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 
 const ACCEPTED_FORMATS = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/x-wav', 'audio/wave', 'audio/webm', 'audio/ogg'];
 
@@ -14,14 +17,53 @@ export default function QuickTranscribe() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcription, setTranscription] = useState<string | null>(null);
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const utils = trpc.useUtils();
   const uploadAudio = trpc.upload.audio.useMutation();
+  
+  const { data: history = [], isLoading: loadingHistory } = trpc.transcription.list.useQuery({
+    limit: 50,
+  });
+
+  const saveTranscription = trpc.transcription.save.useMutation({
+    onSuccess: () => {
+      utils.transcription.list.invalidate();
+      toast.success("Transcrição salva no histórico!");
+    },
+  });
+
+  const deleteTranscription = trpc.transcription.delete.useMutation({
+    onSuccess: () => {
+      utils.transcription.list.invalidate();
+      toast.success("Transcrição removida do histórico!");
+    },
+  });
+
   const transcribeMutation = trpc.transcription.transcribe.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setTranscription(data.text);
       setDetectedLanguage(data.language);
       toast.success("Transcrição concluída!");
+      
+      // Save to history automatically
+      if (file) {
+        const audioUrl = await uploadAudio.mutateAsync({
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+          base64Data: await fileToBase64(file),
+        });
+        
+        await saveTranscription.mutateAsync({
+          audioUrl: audioUrl.url,
+          audioFilename: file.name,
+          transcription: data.text,
+          language: data.language,
+          duration: data.duration,
+        });
+      }
     },
     onError: (error) => {
       toast.error(error.message);
@@ -57,286 +99,312 @@ export default function QuickTranscribe() {
       return;
     }
     
-    // No file size limit
-
     setFile(selectedFile);
     setTranscription(null);
     setDetectedLanguage(null);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      validateAndSetFile(selectedFile);
-    }
-  };
-
-  const removeFile = () => {
-    setFile(null);
-    setTranscription(null);
-    setDetectedLanguage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+    });
   };
 
   const handleTranscribe = async () => {
-    if (!file) {
-      toast.error("Selecione um arquivo de áudio.");
-      return;
-    }
+    if (!file) return;
 
     setIsTranscribing(true);
 
     try {
-      // Convert file to base64
-      const reader = new FileReader();
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          const result = reader.result as string;
-          const base64 = result.split(',')[1];
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      // Upload to S3
-      const { url: audioUrl } = await uploadAudio.mutateAsync({
+      const base64Data = await fileToBase64(file);
+      
+      const uploadResult = await uploadAudio.mutateAsync({
         fileName: file.name,
         fileSize: file.size,
         contentType: file.type,
         base64Data,
       });
-      
-      // Transcribe
-      await transcribeMutation.mutateAsync({ audioUrl });
+
+      await transcribeMutation.mutateAsync({
+        audioUrl: uploadResult.url,
+      });
     } catch (error) {
-      // Error handled by mutation
+      toast.error("Erro ao processar áudio");
+      setIsTranscribing(false);
     }
   };
 
-  const copyToClipboard = () => {
+  const handleCopy = () => {
     if (transcription) {
       navigator.clipboard.writeText(transcription);
       toast.success("Transcrição copiada!");
     }
   };
 
-  const downloadTranscription = () => {
-    if (transcription) {
+  const handleDownload = () => {
+    if (transcription && file) {
       const blob = new Blob([transcription], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = file ? `${file.name.replace(/\.[^/.]+$/, "")}_transcricao.txt` : 'transcricao.txt';
+      a.download = `${file.name.replace(/\.[^/.]+$/, "")}-transcricao.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success("Transcrição baixada!");
     }
   };
 
-  const startNewTranscription = () => {
-    setFile(null);
-    setTranscription(null);
-    setDetectedLanguage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  const handleDelete = (transcriptionId: number) => {
+    if (confirm("Deseja remover esta transcrição do histórico?")) {
+      deleteTranscription.mutate({ transcriptionId });
     }
   };
+
+  const handleCopyFromHistory = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Transcrição copiada!");
+  };
+
+  const handleDownloadFromHistory = (transcription: string, filename: string) => {
+    const blob = new Blob([transcription], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename.replace(/\.[^/.]+$/, "")}-transcricao.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredHistory = history.filter((item) =>
+    item.audioFilename.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.transcription.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <DashboardLayout>
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header */}
+      <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Transcrição Rápida</h1>
-          <p className="text-slate-400 mt-1">
-            Converta áudio em texto rapidamente. Sem análise de IA, sem custo adicional.
+          <h1 className="text-3xl font-bold">Transcrição Rápida</h1>
+          <p className="text-muted-foreground mt-2">
+            Transcreva áudios rapidamente sem gerar documentação completa
           </p>
         </div>
 
-        {/* Info Banner */}
-        <Card className="bg-emerald-500/10 border-emerald-500/30">
-          <CardContent className="flex items-center gap-4 py-4">
-            <Mic className="h-5 w-5 text-emerald-400" />
-            <div>
-              <p className="text-emerald-200 font-medium">Transcrição gratuita</p>
-              <p className="text-emerald-300/70 text-sm">
-                Esta funcionalidade não requer API Key. Apenas converte áudio em texto.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <Tabs defaultValue="transcribe" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="transcribe">
+              <Mic className="w-4 h-4 mr-2" />
+              Nova Transcrição
+            </TabsTrigger>
+            <TabsTrigger value="history">
+              <Clock className="w-4 h-4 mr-2" />
+              Histórico
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Upload Card */}
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-white">Upload de Áudio</CardTitle>
-            <CardDescription className="text-slate-400">
-              Selecione um arquivo de áudio para transcrever
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {!file ? (
-              <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
-                  isDragging 
-                    ? 'border-emerald-500 bg-emerald-500/10' 
-                    : 'border-slate-600 hover:border-slate-500 bg-slate-700/30'
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".wav,.mp3,.webm,.ogg,audio/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
+          <TabsContent value="transcribe" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upload de Áudio</CardTitle>
+                <CardDescription>
+                  Envie um arquivo de áudio para transcrever (WAV, MP3, WebM, OGG)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`
+                    border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors
+                    ${isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}
+                  `}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_FORMATS.join(',')}
+                    onChange={(e) => {
+                      const selectedFile = e.target.files?.[0];
+                      if (selectedFile) validateAndSetFile(selectedFile);
+                    }}
+                    className="hidden"
+                  />
+                  
+                  {file ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <FileAudio className="w-8 h-8 text-primary" />
+                      <div className="text-left">
+                        <p className="font-medium">{file.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFile(null);
+                          setTranscription(null);
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
+                      <p className="text-lg font-medium">Arraste um arquivo ou clique para selecionar</p>
+                      <p className="text-sm text-muted-foreground">
+                        Formatos aceitos: WAV, MP3, WebM, OGG
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  onClick={handleTranscribe}
+                  disabled={!file || isTranscribing}
+                  className="w-full"
+                  size="lg"
+                >
+                  {isTranscribing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Transcrevendo...
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4 mr-2" />
+                      Transcrever Áudio
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {transcription && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Transcrição</CardTitle>
+                      {detectedLanguage && (
+                        <CardDescription>Idioma detectado: {detectedLanguage}</CardDescription>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={handleCopy}>
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copiar
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleDownload}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Baixar
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+                    <p className="whitespace-pre-wrap">{transcription}</p>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Histórico de Transcrições</CardTitle>
+                <CardDescription>
+                  Suas transcrições anteriores salvas automaticamente
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Input
+                  placeholder="Buscar por nome de arquivo ou conteúdo..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <Upload className={`h-10 w-10 mx-auto mb-3 ${isDragging ? 'text-emerald-400' : 'text-slate-500'}`} />
-                <p className="text-slate-300 font-medium">
-                  Arraste e solte seu arquivo aqui
-                </p>
-                <p className="text-slate-500 text-sm mt-1">
-                  ou clique para selecionar
-                </p>
-                <p className="text-slate-600 text-xs mt-3">
-                  Formatos aceitos: WAV, MP3, WebM, OGG (sem limite de tamanho)
-                </p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4 p-4 bg-slate-700/30 rounded-lg border border-slate-600">
-                <div className="h-12 w-12 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                  <FileAudio className="h-6 w-6 text-emerald-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium truncate">{file.name}</p>
-                  <p className="text-slate-400 text-sm">{formatFileSize(file.size)}</p>
-                </div>
-                {!isTranscribing && !transcription && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-slate-400 hover:text-red-400"
-                    onClick={removeFile}
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                )}
-              </div>
-            )}
 
-            {/* Transcribe Button */}
-            {file && !transcription && (
-              <Button
-                onClick={handleTranscribe}
-                disabled={isTranscribing}
-                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
-              >
-                {isTranscribing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Transcrevendo...
-                  </>
+                {loadingHistory ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredHistory.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">
+                      {searchQuery ? "Nenhuma transcrição encontrada" : "Nenhuma transcrição no histórico"}
+                    </p>
+                  </div>
                 ) : (
-                  <>
-                    <Mic className="mr-2 h-4 w-4" />
-                    Transcrever Áudio
-                  </>
+                  <ScrollArea className="h-[600px]">
+                    <div className="space-y-4">
+                      {filteredHistory.map((item) => (
+                        <Card key={item.id}>
+                          <CardHeader>
+                            <div className="flex items-start justify-between">
+                              <div className="space-y-1">
+                                <CardTitle className="text-base">{item.audioFilename}</CardTitle>
+                                <CardDescription>
+                                  {new Date(item.createdAt).toLocaleString('pt-BR')}
+                                  {item.language && ` • ${item.language}`}
+                                  {item.duration && ` • ${Math.floor(item.duration / 60)}min ${item.duration % 60}s`}
+                                </CardDescription>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleCopyFromHistory(item.transcription)}
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDownloadFromHistory(item.transcription, item.audioFilename)}
+                                >
+                                  <Download className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDelete(item.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-muted-foreground line-clamp-3">
+                              {item.transcription}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 )}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Transcription Result */}
-        {transcription && (
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-white">Transcrição</CardTitle>
-                  <CardDescription className="text-slate-400">
-                    {detectedLanguage && `Idioma detectado: ${detectedLanguage.toUpperCase()}`}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-slate-600 text-slate-300"
-                    onClick={copyToClipboard}
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copiar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-slate-600 text-slate-300"
-                    onClick={downloadTranscription}
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Baixar
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-slate-900 rounded-lg p-4 max-h-[400px] overflow-y-auto">
-                <p className="text-slate-300 whitespace-pre-wrap text-sm leading-relaxed">
-                  {transcription}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full border-slate-600 text-slate-300"
-                onClick={startNewTranscription}
-              >
-                Nova Transcrição
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Info Card */}
-        <Card className="bg-slate-800/30 border-slate-700">
-          <CardContent className="pt-6">
-            <h3 className="text-white font-medium mb-3">Transcrição Rápida vs Projeto Completo</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <p className="text-emerald-400 font-medium text-sm">Transcrição Rápida</p>
-                <ul className="text-slate-400 text-sm space-y-1">
-                  <li>• Apenas converte áudio em texto</li>
-                  <li>• Não requer API Key</li>
-                  <li>• Resultado instantâneo</li>
-                  <li>• Ideal para notas rápidas</li>
-                </ul>
-              </div>
-              <div className="space-y-2">
-                <p className="text-violet-400 font-medium text-sm">Projeto Completo</p>
-                <ul className="text-slate-400 text-sm space-y-1">
-                  <li>• Transcrição + Análise de IA</li>
-                  <li>• Gera PRD, README, TODO</li>
-                  <li>• Requer API Key do OpenRouter</li>
-                  <li>• Ideal para documentação técnica</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

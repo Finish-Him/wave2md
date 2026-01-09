@@ -34,7 +34,11 @@ import {
   getProjectShare,
   getProjectShares,
   updateShareViewCount,
-  deleteProjectShare
+  deleteProjectShare,
+  createQuickTranscription,
+  getUserQuickTranscriptions,
+  getQuickTranscription,
+  deleteQuickTranscription
 } from "./db";
 import { nanoid } from "nanoid";
 import { transcribeAudio } from "./_core/voiceTranscription";
@@ -403,6 +407,53 @@ Be thorough and professional. Extract all relevant information from the transcri
           language: result.language,
           duration: result.duration,
         };
+      }),
+
+    // Save transcription to history
+    save: protectedProcedure
+      .input(z.object({
+        audioUrl: z.string(),
+        audioFilename: z.string(),
+        transcription: z.string(),
+        language: z.string().optional(),
+        duration: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const transcriptionId = await createQuickTranscription({
+          userId: ctx.user.id,
+          audioUrl: input.audioUrl,
+          audioFilename: input.audioFilename,
+          transcription: input.transcription,
+          language: input.language,
+          duration: input.duration,
+        });
+
+        return { id: transcriptionId };
+      }),
+
+    // Get user's transcription history
+    list: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(100).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await getUserQuickTranscriptions(ctx.user.id, input.limit);
+      }),
+
+    // Delete a transcription from history
+    delete: protectedProcedure
+      .input(z.object({
+        transcriptionId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const transcription = await getQuickTranscription(input.transcriptionId);
+        
+        if (!transcription || transcription.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Transcription not found" });
+        }
+
+        await deleteQuickTranscription(input.transcriptionId);
+        return { success: true };
       }),
   }),
 

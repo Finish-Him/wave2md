@@ -133,3 +133,14 @@
 
 ## Bugs Reportados
 - [x] Corrigir erro 404 na página de criação de novo projeto (rota /new-project adicionada)
+
+## Histórico de Transcrições Rápidas
+- [x] Criar tabela `quick_transcriptions` no banco de dados
+- [x] Adicionar queries de salvamento e listagem no db.ts
+- [x] Criar endpoint para salvar transcrição rápida
+- [x] Criar endpoint para listar histórico de transcrições
+- [x] Criar endpoint para deletar transcrição do histórico
+- [x] Adicionar seção de histórico na página de Transcrição Rápida
+- [x] Permitir copiar/baixar transcrições antigas
+- [x] Adicionar busca no histórico de transcrições
+- [x] Salvamento automático no histórico após transcrição

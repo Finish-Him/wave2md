@@ -137,3 +137,21 @@ export const projectShares = mysqlTable("project_shares", {
 
 export type ProjectShare = typeof projectShares.$inferSelect;
 export type InsertProjectShare = typeof projectShares.$inferInsert;
+
+/**
+ * Quick transcriptions history
+ * Stores transcriptions from the "Quick Transcribe" feature for later access
+ */
+export const quickTranscriptions = mysqlTable("quick_transcriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  audioUrl: text("audioUrl").notNull(), // S3 URL of the audio file
+  audioFilename: varchar("audioFilename", { length: 255 }).notNull(),
+  transcription: text("transcription").notNull(), // Full transcription text
+  language: varchar("language", { length: 10 }), // Detected language (ISO-639-1)
+  duration: int("duration"), // Audio duration in seconds
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type QuickTranscription = typeof quickTranscriptions.$inferSelect;
+export type InsertQuickTranscription = typeof quickTranscriptions.$inferInsert;

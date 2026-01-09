@@ -7,7 +7,8 @@ import {
   documents, InsertDocument, Document,
   promptTemplates, InsertPromptTemplate, PromptTemplate,
   chatMessages, InsertChatMessage, ChatMessage,
-  projectShares, InsertProjectShare, ProjectShare
+  projectShares, InsertProjectShare, ProjectShare,
+  quickTranscriptions, InsertQuickTranscription, QuickTranscription
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -443,4 +444,45 @@ export async function deleteExpiredShares(): Promise<void> {
       eq(projectShares.expiresAt, now),
       // Only delete if expiresAt is in the past
     ));
+}
+
+// ============ QUICK TRANSCRIPTIONS OPERATIONS ============
+
+export async function createQuickTranscription(data: InsertQuickTranscription): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(quickTranscriptions).values(data);
+  return result[0].insertId;
+}
+
+export async function getUserQuickTranscriptions(userId: number, limit = 50): Promise<QuickTranscription[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(quickTranscriptions)
+    .where(eq(quickTranscriptions.userId, userId))
+    .orderBy(desc(quickTranscriptions.createdAt))
+    .limit(limit);
+}
+
+export async function getQuickTranscription(transcriptionId: number): Promise<QuickTranscription | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select()
+    .from(quickTranscriptions)
+    .where(eq(quickTranscriptions.id, transcriptionId))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function deleteQuickTranscription(transcriptionId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(quickTranscriptions)
+    .where(eq(quickTranscriptions.id, transcriptionId));
 }
