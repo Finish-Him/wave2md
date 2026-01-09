@@ -21,6 +21,7 @@ function Router() {
         <Route path={"/"} component={Home} />
       <Route path="/share/:token" component={SharedProject} />
       <Route path={"/404"} component={NotFound} />
+      <Route path="/new-project" component={NewProject} />
       <Route path="/projects" component={Projects} />
       <Route path="/projects/:id" component={ProjectDetail} />
       <Route path="/transcribe" component={QuickTranscribe} />

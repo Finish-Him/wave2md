@@ -130,3 +130,6 @@
 - [x] Implementar lógica de fallback para templates padrão (built-in)
 - [x] Usar template específico para cada tipo de documento (PRD, README, TODO, System)
 - [x] Testar geração com templates personalizados
+
+## Bugs Reportados
+- [x] Corrigir erro 404 na página de criação de novo projeto (rota /new-project adicionada)
